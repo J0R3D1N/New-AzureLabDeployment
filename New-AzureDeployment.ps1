@@ -1,6 +1,6 @@
 <#
     .SYNOPSIS
-        Deploys Azure resources via ARM templates
+        Deploys Azure resources via ARM templates#
 #>
 
 [cmdletbinding()]
