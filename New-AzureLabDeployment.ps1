@@ -14,8 +14,8 @@ $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
 
 #Move to the location of the script if you not threre already
 Write-Host "Set-Location to script's directory..."
-$Script:Path = [System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition) 
-Set-Location $Script:Path
+$Script:DirectoryPath = [System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition) 
+Set-Location $Script:DirectoryPath
 
 #Import Helpers
 Write-Host "Loading Modules and Helpers..."
@@ -30,56 +30,71 @@ Else {Write-Verbose "Azure Connection Verified!"}
 #Save Starting Sub
 Write-Host "Pop Up - Select Starting Subscription in Out-Gridview"
 #$StartingSub = Get-AzureRmSubscription | Out-GridView -OutputMode Single -Title "Select Starting Subscription"
-$objAzureSub = Find-AzureSubscription -Verbose
+#$Script:objAzureSub = Find-AzureSubscription -Verbose
 
 # Get the configuration data
-Write-Debug "Loading Configuration Data..."
-$Configdata = . ("{0}\Environments\Data.ps1" -f $Script:Path)
+#Write-Debug "Loading Configuration Data..."
+
+$SizeSelection = (@"
+`n
+ [0] Small (9 VMs / 3 Resource Groups)
+ [1] Medium (24 VMs / 4 Resource Groups)
+ [2] Large (63 VMs / 7 Resource Groups)
+ `n
+  Please select a Lab Size
+"@)
+
+$SizeRange = 0..2
+Do {
+    $SizeChoice = Show-Menu -Title "Select an Azure Lab Size" -Menu $SizeSelection -Style Mini -Color Yellow
+}
+While (($SizeRange -notcontains $SizeChoice) -OR (-NOT $SizeChoice.GetType().Name -eq "Int32"))
+
+Switch ($SizeChoice) {
+    0 {$Size = "Small"}
+    1 {$Size = "Medium"}
+    2 {$Size = "Large"}
+}
+
+$OSSelection = (@"
+`n
+ [0] Windows Server
+ [1] Linux (RHEL)
+ [2] Windows Server and Linux (RHEL)
+ `n
+  Please select an Operating System
+"@)
+
+$OSRange = 0..2
+Do {
+    $OSChoice = Show-Menu -Title "Select an Operating System deployment" -Menu $OSSelection -Style Mini -Color Yellow
+}
+While (($OSRange -notcontains $OSChoice) -OR (-NOT $OSChoice.GetType().Name -eq "Int32"))
+
+Switch ($OSChoice) {
+    0 {$OperatingSystem = "Windows"}
+    1 {$OperatingSystem = "Linux"}
+    2 {$OperatingSystem = "Both"}
+}
+
+#$Configdata = . ("{0}\Environments\Data.ps1" -f $Script:Path)
 #$configData = & $ConfigurationPath
+$ConfigData = Generate-LabDetails -Size $Size -OperatingSystem $OperatingSystem -Verbose
 
-#Select Deployments
-Write-Host "Pop Up - Select Select Deployments in Out-Gridview"
-$DeploymentFilters = $Configdata.Deployments | ForEach-Object {$_.DeploymentName} | Out-GridView -Title "Select Deployments" -OutputMode Multiple
-
-# Apply filter to only deploy the correct Deployments.
-$deployDeployment = @()
-if($DeploymentFilters)
-{
-    Write-Verbose "Appling filter to Deployments being deployed"
-
-    foreach($DeploymentFilter in $DeploymentFilters)
-    {
-        # find any vm that has a name like the VM filter and add it to $deployDeployment unless it is already there
-        $deployDeployment += $configData.Deployments.Where{ `
-            ($_.DeploymentName -like $DeploymentFilter) `
-            -and ($deployDeployment.DeploymentName -notcontains $_.DeploymentName)`
-        }
+$Deployments = [Ordered]@{}
+Foreach ($Key in $ConfigData.Keys) {
+    For ($i=0;$i -lt $ConfigData.$($Key).AvailabilitySets.Count;$i++){
+        $Deployments.$("$Key-CreateAvailabilitySet-$i") = $ConfigData.$($Key).AvailabilitySets[$i]
+    }
+    For ($i=0;$i -lt $ConfigData.$($Key).VirtualMachines.Count;$i++){
+        $Deployments.$("$Key-CreateVirtualmachine-$i") = $ConfigData.$($Key).VirtualMachines[$i]
     }
 }
-else
-{
-    Write-Verbose "No filter applied, deploying all Deployments"
-
-    $deployDeployment = $configData.Deployments
-}
-
-# Start Deployments
-Write-Output "`n$($deployDeployment.Count) Deployments Selected"
-
-Write-Host "`nType ""Deploy"" to start Deployments, or Ctrl-C to Exit" -ForegroundColor Green
-$HostInput = $Null
-$HostInput = Read-Host "Final Answer" 
-If ($HostInput -ne "Deploy" ) {
-    Write-Host "Exiting"
-    break
-}
-
-Write-Output "Starting $($deployDeployment.Count) Deployments"
 
 $deploymentJobs = @()
-foreach($Deployment in $deployDeployment)
+foreach($Deployment in $Deployments.Keys)
 {
-    Write-Output "Deploying $($Deployment.DeploymentName)"
+    Write-Debug "Deploying $($Deployments[$Deployment])"
 
     $deploymentJobs += @{
         Job = New-ArmDeployment -TemplateFile $Deployment.TemplateFilePath `

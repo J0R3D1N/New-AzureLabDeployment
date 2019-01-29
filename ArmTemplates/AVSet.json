@@ -11,13 +11,13 @@
         "updateDomains": {
             "type": "int"
         },
-        "location": {
-            "type": "string"
-        },
         "sku": {
             "type": "string"
+        },
+        "location": {
+            "type": "string"
         }
-    }, 
+    },
     "resources": [
         {
             "apiVersion": "2016-04-30-preview",

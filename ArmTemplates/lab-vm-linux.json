@@ -1,0 +1,179 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "publicIPAddressName": {
+        "type": "string"
+    },
+    "virtualMachineSize": {
+        "type": "string"
+    },
+    "subnetName": {
+        "type": "string"
+    },
+    "virtualNicName": {
+        "type": "string"
+    },
+    "adminPassword": {
+        "type": "securestring"
+    },
+    "availabilitySetName": {
+        "type": "string"
+    },
+    "adminUsername": {
+        "type": "string"
+    },
+    "publicIpAddressType": {
+        "type": "string"
+    },
+    "publicIpAddressSku": {
+        "type": "string"
+    },
+    "storageAccountName": {
+        "type": "string"
+    },
+    "virtualMachineName": {
+        "type": "string"
+    },
+    "virtualNetworkName": {
+        "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "variables": {
+    "addressPrefix": "172.16.0.0/16",
+    "subnetPrefix": "172.16.254.0/24",
+    "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('subnetName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[parameters('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "apiVersion": "2018-07-01",
+      "sku": {
+        "name": "Premium_LRS"
+      },
+      "kind": "Storage",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[parameters('publicIPAddressName')]",
+      "location": "[parameters('location')]",
+      "apiVersion": "2018-10-01",
+      "properties": {
+        "publicIPAllocationMethod": "[parameters('publicIpAddressType')]"
+      },
+      "sku": {
+          "name": "[parameters('publicIpAddressSku')]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[parameters('virtualNetworkName')]",
+      "location": "[parameters('location')]",
+      "apiVersion": "2018-10-01",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('addressPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[parameters('subnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('subnetPrefix')]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[parameters('virtualNicName')]",
+      "location": "[parameters('location')]",
+      "apiVersion": "2018-10-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses/', parameters('publicIPAddressName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks/', parameters('virtualNetworkName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "[parameters('publicIpAddressType')",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',parameters('publicIPAddressName'))]"
+              },
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[parameters('virtualMachineName')]",
+      "location": "[parameters('location')]",
+      "apiVersion": "2018-10-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/', parameters('storageAccountName'))]",
+        "[resourceId('Microsoft.Network/networkInterfaces/', parameters('virtualNicName'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('virtualMachineSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('virtualmachineName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "RedHat",
+            "offer": "RHEL",
+            "sku": "7.3",
+            "version": "latest"
+          },
+          "osDisk": {
+            "createOption": "FromImage",
+            "managedDisk": {
+                "storageAccountType": "Premium_LRS"
+            }
+          },
+          "dataDisks": []
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces',parameters('virtualNicName'))]"
+            }
+          ]
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": true,
+            "storageUri": "[reference(resourceId('Microsoft.Storage/storageAccounts/', parameters('storageAccountName'))).primaryEndpoints.blob]"
+          }
+        },
+        "availabilitySet": {
+            "id": "[resourceId('Microsoft.Compute/availabilitySets', parameters('availabilitySetName'))]"
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "hostname": {
+      "type": "string",
+      "value": "[reference(parameters('publicIPAddressName')).dnsSettings.fqdn]"
+    }
+  }
+}
