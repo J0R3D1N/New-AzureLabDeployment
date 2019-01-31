@@ -90,8 +90,9 @@ Foreach ($Key in $ConfigData.Keys) {
     }
 }
 
-Write-Host ("Saving Lab Configuration Data to Json")
-$Deployments | ConvertTo-Json | Out-File -FilePath (".\Azure_Lab_ConfigData_{0}.json" -f (Get-Date -Format yyyyMMdd_HHmmss))
+$Exportfile = ("{0}\Exports\Azure_Lab_ConfigData_{1}" -f $Script:DirectoryPath,(Get-Date -Format yyyyMMdd_HHmmss))
+Write-Host ("Saving Lab Configuration Data to Json: {0}" -f $Exportfile)
+$Deployments | ConvertTo-Json | Out-File -FilePath $Exportfile
 Write-Host ("Found {0} Deployments in the lab configuration data" -f $Deployments.Count)
 [System.Collections.ArrayList]$Jobs = @()
 foreach($DeploymentName in $Deployments.Keys) {
