@@ -9,7 +9,7 @@ Param (
     [System.String]$Environment = "AzureUSGovernment"
 )
 
-$elapsed = [System.Diagnostics.Stopwatch]::StartNew()
+$Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 
 #Move to the location of the script if you not threre already
@@ -19,18 +19,13 @@ Set-Location $Script:DirectoryPath
 
 #Import Helpers
 Write-Host "Loading Modules and Helpers..."
-Import-Module ".\Modules\AzureDeploymentHelper" -Force -Verbose
+Import-Module ".\Modules\AzureDeploymentHelper" -Force -Verbose:$false
 
 
 #If not logged in to Azure, start login
 $AzureConnectionStatus = Get-AzureConnection -Environment $Environment
 If (-NOT $AzureConnectionStatus) {Write-Warning "Unable to verify Azure Connection Status!"; Break}
-Else {Write-Verbose "Azure Connection Verified!"}
-
-#Save Starting Sub
-Write-Host "Pop Up - Select Starting Subscription in Out-Gridview"
-#$StartingSub = Get-AzureRmSubscription | Out-GridView -OutputMode Single -Title "Select Starting Subscription"
-#$Script:objAzureSub = Find-AzureSubscription -Verbose
+Else {Write-Host "Azure Connection Verified!"}
 
 # Get the configuration data
 #Write-Debug "Loading Configuration Data..."
@@ -79,7 +74,11 @@ Switch ($OSChoice) {
 
 #$Configdata = . ("{0}\Environments\Data.ps1" -f $Script:Path)
 #$configData = & $ConfigurationPath
-$ConfigData = Generate-LabDetails -Size $Size -OperatingSystem $OperatingSystem -Verbose
+$ConfigData = New-AzureLab -Size $Size -OperatingSystem $OperatingSystem -Verbose
+If ($ConfigData -eq $false) {
+    Write-Warning ("Failed to create Lab Config Data")
+    Return $null
+}
 
 $Deployments = [Ordered]@{}
 Foreach ($Key in $ConfigData.Keys) {
@@ -91,48 +90,27 @@ Foreach ($Key in $ConfigData.Keys) {
     }
 }
 
-$deploymentJobs = @()
-foreach($Deployment in $Deployments.Keys)
-{
-    Write-Debug "Deploying $($Deployments[$Deployment])"
-
-    $deploymentJobs += @{
-        Job = New-ArmDeployment -TemplateFile $Deployment.TemplateFilePath `
-                                -DeploymentName $Deployment.DeploymentName `
-                                -ResourceGroupName $Deployment.ResourceGroupName `
-                                -Subscription $Deployment.Subscription `
-                                -TemplateParameterObject $Deployment.Parameters `
-                                -Verbose
-        DeploymentName = $Deployment.DeploymentName
+Write-Host ("Saving Lab Configuration Data to Json")
+$Deployments | ConvertTo-Json | Out-File -FilePath (".\Azure_Lab_ConfigData_{0}.json" -f (Get-Date -Format yyyyMMdd_HHmmss))
+Write-Host ("Found {0} Deployments in the lab configuration data" -f $Deployments.Count)
+[System.Collections.ArrayList]$Jobs = @()
+foreach($DeploymentName in $Deployments.Keys) {
+    Write-Host "Deploying $DeploymentName"
+    $DeploymentParams = [Ordered]@{
+        Name = $DeploymentName
+        ResourceGroupName = $Deployments[$DeploymentName].ResourceGroupName
+        TemplateFile = $Deployments[$DeploymentName].TemplateFilePath
+        TemplateParameterObject = $Deployments[$DeploymentName].Parameters
     }
-
-    # Pause for 5 seconds otherwise we can have name collision issues
-    Start-Sleep -Second 5
+    $DeploymentJob = New-AzureRmResourceGroupDeployment @DeploymentParams -AsJob
+    [Void]$Jobs.Add($DeploymentJob)
 }
 
-do
-{
-    $jobsStillRunning = $false
-    foreach($deploymentJob in $deploymentJobs)
-    {
-        Receive-Job -Job $deploymentJob.Job
+Write-Host ("Created {0} Deployment Jobs" -f $Jobs.Count)
 
-        $currentStatus = Get-Job -Id $deploymentJob.Job.Id
+Start-Sleep -Milliseconds 1750
 
-        if(@("NotStarted", "Running") -contains $currentStatus.State)
-        {
-            $jobsStillRunning = $true
-            Start-Sleep -Second 10
-        }
-    }
-}
-while($jobsStillRunning)
+#Get-PSJobStatus -RefreshInterval 5 -RequiredJobs $Jobs.Count -MaximumJobs $Jobs.Count
 
-If ((Get-AzureRmContext).Subscription.ID -ne $StartingSub) {
-    Write-Host "Changing back to starting Subscription $($StartingSub)"
-    Set-AzureRmContext -SubscriptionId $StartingSub 
-}
-
-Write-Output "Total Elapsed Time: $($elapsed.Elapsed.ToString())"
-
-$elapsed.Stop()
+$Stopwatch.Stop()
+Write-Output ("Script Completed in: {0}" -f $Stopwatch.Elapsed.ToString())

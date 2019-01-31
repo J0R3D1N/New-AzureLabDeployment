@@ -26,9 +26,6 @@
         "adminPassword": {
             "type": "securestring"
         },
-        "availabilitySetName": {
-            "type": "string"
-        },
         "storageAccountName": {
             "type": "string"
         },
@@ -103,9 +100,6 @@
                         "enabled": true,
                         "storageUri": "[concat('https://', parameters('StorageAccountName'), '.blob.core.usgovcloudapi.net/')]"
                     }
-                },
-                "availabilitySet": {
-                    "id": "[resourceId('Microsoft.Compute/availabilitySets', parameters('availabilitySetName'))]"
                 }
             }
         },

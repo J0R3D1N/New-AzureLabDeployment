@@ -11,10 +11,10 @@
         "updateDomains": {
             "type": "int"
         },
-        "sku": {
+        "location": {
             "type": "string"
         },
-        "location": {
+        "sku": {
             "type": "string"
         }
     },
