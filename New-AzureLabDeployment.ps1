@@ -1,8 +1,3 @@
-<#
-    .SYNOPSIS
-        Deploys Azure resources via ARM templates#
-#>
-
 [cmdletbinding()]
 Param (
     [ValidateSet("AzureUSGovernment","AzureCloud","AzureChinaCloud","AzureGermanCloud")]
@@ -12,23 +7,17 @@ Param (
 $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 
-#Move to the location of the script if you not threre already
+
 Write-Host "Set-Location to script's directory..."
 $Script:DirectoryPath = [System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition) 
 Set-Location $Script:DirectoryPath
 
-#Import Helpers
-Write-Host "Loading Modules and Helpers..."
+Write-Host "Loading Module..."
 Import-Module ".\Modules\AzureDeploymentHelper" -Force -Verbose:$false
 
-
-#If not logged in to Azure, start login
 $AzureConnectionStatus = Get-AzureConnection -Environment $Environment
 If (-NOT $AzureConnectionStatus) {Write-Warning "Unable to verify Azure Connection Status!"; Break}
 Else {Write-Host "Azure Connection Verified!"}
-
-# Get the configuration data
-#Write-Debug "Loading Configuration Data..."
 
 $SizeSelection = (@"
 `n
@@ -72,8 +61,6 @@ Switch ($OSChoice) {
     2 {$OperatingSystem = "Both"}
 }
 
-#$Configdata = . ("{0}\Environments\Data.ps1" -f $Script:Path)
-#$configData = & $ConfigurationPath
 $ConfigData = New-AzureLab -Size $Size -OperatingSystem $OperatingSystem -Verbose
 If ($ConfigData -eq $false) {
     Write-Warning ("Failed to create Lab Config Data")
