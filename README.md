@@ -60,10 +60,10 @@ The script will prompt you for any details:
 - *Subsequent runs*, the script will verify the requirements and build the deployment file
 
 ### Labsize Selection Screen
-![lab size](media/labsize.png)
+![lab size](Media/labsize.png)
 
 ### OS Selection Screen
-![os](media/operatingsystems.png)
+![os](Media/operatingsystems.png)
 
 ### Subsequent Lab Deployments with existing Resource Groups
-![Verbose Output](media/verboseoutput.png)
+![Verbose Output](Media/verboseoutput.png)
