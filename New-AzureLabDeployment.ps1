@@ -30,7 +30,7 @@
   Operating System:     Choose All Windows (2016-Datacenter), All Linux (RHEL 7.4) or a Both
   ------------------------------------------------------------------------------------------------------------
 #>
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess,ConfirmImpact="High")]
 Param (
     [ValidateSet("AzureUSGovernment","AzureCloud","AzureChinaCloud","AzureGermanCloud")]
     [System.String]$Environment = "AzureUSGovernment"
@@ -116,31 +116,36 @@ Foreach ($Key in $ConfigData.Keys) {
     }
 }
 
-# Exports the lab deployment hashtable to a json file for review and history
-$Exportfile = ("{0}\Exports\Azure_Lab_ConfigData_{1}" -f $Script:DirectoryPath,(Get-Date -Format yyyyMMdd_HHmmss))
-Write-Host ("Saving Lab Configuration Data to Json: {0}" -f $Exportfile)
-$Deployments | ConvertTo-Json | Out-File -FilePath $Exportfile
-
-Write-Host ("Found {0} Deployments in the lab configuration data" -f $Deployments.Count)
-[System.Collections.ArrayList]$Jobs = @()
-foreach($DeploymentName in $Deployments.Keys) {
-    Write-Host "Deploying $DeploymentName"
-    $DeploymentParams = [Ordered]@{
-        Name = $DeploymentName
-        ResourceGroupName = $Deployments[$DeploymentName].ResourceGroupName
-        TemplateFile = $Deployments[$DeploymentName].TemplateFilePath
-        TemplateParameterObject = $Deployments[$DeploymentName].Parameters
+$AzureContext = Get-AzureRmContext
+If ($PSCmdlet.ShouldProcess("[$($AzureContext.Subscription.Name)] $($AzureContext.Environment) using $($Deployments.Count) Jobs","[$Size] New Azure Lab Deployment")) {
+    # Exports the lab deployment hashtable to a json file for review and history
+    $Exportfile = ("{0}\Exports\Azure_Lab_ConfigData_{1}.json" -f $Script:DirectoryPath,(Get-Date -Format yyyyMMdd_HHmmss))
+    Write-Host ("Saving Lab Configuration Data to Json: {0}" -f $Exportfile)
+    $Deployments | ConvertTo-Json | Out-File -FilePath $Exportfile
+    Get-Job | Remove-Job
+    Write-Host ("Found {0} Deployments in the lab configuration data" -f $Deployments.Count)
+    [System.Collections.ArrayList]$Jobs = @()
+    foreach($DeploymentName in $Deployments.Keys) {
+        Write-Host "Deploying $DeploymentName"
+        $DeploymentParams = [Ordered]@{
+            Name = $DeploymentName
+            ResourceGroupName = $Deployments[$DeploymentName].ResourceGroupName
+            TemplateFile = $Deployments[$DeploymentName].TemplateFilePath
+            TemplateParameterObject = $Deployments[$DeploymentName].Parameters
+        }
+        $DeploymentJob = New-AzureRmResourceGroupDeployment @DeploymentParams -AsJob
+        [Void]$Jobs.Add($DeploymentJob)
     }
-    $DeploymentJob = New-AzureRmResourceGroupDeployment @DeploymentParams -AsJob
-    [Void]$Jobs.Add($DeploymentJob)
+
+    Write-Host ("Created {0} Deployment Jobs" -f $Jobs.Count)
+
+    Start-Sleep -Milliseconds 1750
+    Read-Host "Press any key to monitor the background jobs..."
+
+    Get-PSJobStatus -RefreshInterval 5 -RequiredJobs $Jobs.Count -MaximumJobs $Jobs.Count
 }
+Else {Write-Warning "User Cancelled the Operation!"}
 
-Write-Host ("Created {0} Deployment Jobs" -f $Jobs.Count)
-
-Start-Sleep -Milliseconds 1750
-Read-Host "Press any key to monitor the background jobs..."
-
-Get-PSJobStatus -RefreshInterval 5 -RequiredJobs $Jobs.Count -MaximumJobs $Jobs.Count
 
 $Stopwatch.Stop()
 Write-Output ("Script Completed in: {0}" -f $Stopwatch.Elapsed.ToString())
