@@ -74,7 +74,7 @@
             "imageReference": {
               "publisher": "RedHat",
               "offer": "RHEL",
-              "sku": "7.3",
+              "sku": "7.6",
               "version": "latest"
             },
             "osDisk": {
